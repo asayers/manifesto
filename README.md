@@ -24,7 +24,7 @@ directory tree under the working directory looks like this:
 ```
 
 Then `mkmanifests` will create a file called ".manifest" in each directory
-inclusing the working directory:
+including the working directory:
 
 ```
 .
@@ -68,7 +68,7 @@ d208b2499488547c4a01e41c9db7dc7c549ff86f	file1
 
 If a directory contains an existing manifest file, it will be updated. If a
 file hasn't been modified since the manifest was last updated then the hash
-will be reused. This is important, since hashing is potantially an expesive
+will be reused. This is important, since hashing is potentially an expensive
 operation.
 
 ## Motivation
@@ -79,7 +79,7 @@ files by using a block address, our copy uses content addressing (the SHA1 of
 the file contents).
 
 This means that the directory structure is preserved in a way which is
-independant of *where* your files are, what they're called, etc. You could move
+independent of *where* your files are, what they're called, etc. You could move
 all your files into one directory and rename them to sequential numbers; so
 long as you have the data, you can recover the directory tree from the manifest
 files.
@@ -102,8 +102,8 @@ Using a scheme like this for backups has a few advantages.
 - Verify file integrity. Using nothing but the hash of the root manifest you
   can verify that none of the files in the snapshot have been tampered with.
   Also, you can detect bit-flips.
-- Append-only. This makes it easy to guarantee that your backup scheme doesn't
-  erase old data. The only file which is modifies should be the list of
+- Files are immutable. This makes it easy to guarantee that your backup scheme
+  doesn't erase old data. The only file which should be modified is the list of
   snapshot root manifests.
 - Flexible regarding underlying blob store. The requirements are very simple:
   once a blob has been written to the store with a certain name, it should be
@@ -112,7 +112,9 @@ Using a scheme like this for backups has a few advantages.
 
 ## Options for object storage
 
-- A directory full of files named by their SHA1 hash.
+- A directory full of files named by their SHA1 hash. Upload with `rsync
+  --ignore-existing`. Keep redundant copies of your backups in sync with unison
+  or rsync+cron.
 - Amazon S3 and similar. (See the [Note on using Glacier])
 - Any key-value database. (Eventually-consistent ones are fine too!)
 
@@ -131,6 +133,9 @@ TODO: write me
    server. Unchanged files will not be re-uploaded.
 3. Finally, upload the root manifest, using `sha1sum` to get its name. Remember
    to add its hash to a file listing your snapshots.
+
+nice/ionice
+
 -->
 
 ## Related work
@@ -173,9 +178,10 @@ also investigate the following dedicated content-addressable stores (CASes):
 
 The chief advantage of using `mkmanifests` over the above is *simplicity*. You
 don't need to install any server software, there's no protocol for moving data
-around, there are no proprietory data formats. All you need is an S3 bucket to
-put your files in. If you read the "Behaviour" section above, then you already
-understand *everything* `mkmanifests` does, including its on-disk format.
+around, there are no proprietary data formats. All you need is an S3 bucket to
+put your files in. If you've read the "Behaviour" section above, then you
+already understand *everything* `mkmanifests` does, including its on-disk
+format.
 
 You can use `mkmanifests` to build a pretty solid backup system. However, there
 are some nice features which it *doesn't* support:
@@ -185,6 +191,23 @@ are some nice features which it *doesn't* support:
 - Block-level deduplication. This would be nice, but it's tough to get it
   right.
 
+## Justifications for technical decisions
+
+### Why create many manifest files rather than just one?
+
+Conceptually, when making deduplicated backups tree-structure of the filesystem
+becomes a DAG. By making a manifest file for each directory, the data structure
+we end up storing is just the Merkle representation of that DAG. I thought this
+was nice.
+
+The other property this gives you is the ability to update the manifests for
+just part of the directory tree, or to build manifests for a supertree and
+automatically reuse the existing ones.
+
+However, keeping a single manifest file at the root of the tree is not a bad
+idea - it prevents your filesystem from becoming littered with manifest files.
+Perhaps I'll make this behaviour available under a command-line flag.
+
 ## Note on using Glacier
 
 TODO: write me. (Bucket listing is expensive but required for dedup. Keep local
@@ -192,10 +215,11 @@ copy of file listing. Still not ideal...)
 
 ## To-do
 
-- It should be possible to parallelise the decents into different branches of
+- It should be possible to parallelise the descents into different branches of
   the directory tree.
 - Perhaps put all the manifests in the same place, but with different
-  filenames, to avoid littering the filesystem.
+  filenames; or just have a single manifest.
 - In order to properly reproduce the original directory structure we need to
   store ownership, permissions, timestamps, links, etc.
 - Support other hashing algorithms?
+- Support ignoring certain files/directories.
