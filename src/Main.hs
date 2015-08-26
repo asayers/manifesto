@@ -182,7 +182,7 @@ subcommandMake = mkManifest
 
 getDirFiles :: Path Abs Dir -> IO [(Path Abs File, SHA1)]
 getDirFiles dir = do
-    (manifest, _) <- fromMaybe (emptyManifest, undefined) <$> readManifest dir
+    manifest <- maybe emptyManifest fst <$> readManifest dir
     return $ map (\(path, hash) -> (dir </> path, hash)) $ HMS.toList (unManifest manifest)
 
 getAllFilesMinusRootManifest :: Path Abs Dir -> IO [(Path Abs File, SHA1)]
@@ -190,14 +190,8 @@ getAllFilesMinusRootManifest dir = do
     (dirs, _) <- listDirectory dir
     let dirs' = map (dir </>) dirs
     files <- getDirFiles dir
-    childFiles <- join <$> mapM getAllFiles dirs'
+    childFiles <- join <$> mapM getAllFilesMinusRootManifest dirs'
     return $ files ++ childFiles
-
-getAllFiles :: Path Abs Dir -> IO [(Path Abs File, SHA1)]
-getAllFiles dir = do
-    files <- getAllFilesMinusRootManifest dir
-    rootManifest <- hashRootManifest dir
-    return (rootManifest : files)
 
 hashRootManifest :: Path Abs Dir -> IO (Path Abs File, SHA1)
 hashRootManifest dir = do
@@ -206,11 +200,17 @@ hashRootManifest dir = do
     hash <- getFileHash path
     return (path, hash)
 
+getAllFiles :: Path Abs Dir -> IO [(Path Abs File, SHA1)]
+getAllFiles dir = do
+    files <- getAllFilesMinusRootManifest dir
+    rootManifest <- hashRootManifest dir
+    return (rootManifest : files)
+
 subcommandList :: Path Abs Dir -> IO ()
 subcommandList dir = do
     lines <- getAllFiles dir
     let output =  T.unlines $ map serialiseAbsoluteEntry lines
-    T.putStrLn output
+    T.putStr output
 
 -------------------------------------------------------------------------------
 -- Plumbing
