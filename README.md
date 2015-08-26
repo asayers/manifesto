@@ -139,20 +139,10 @@ Concerns such as read-availability, write-availability, and data resilience
 should be handled at this level (using techniques such as caching, eventual
 consistency, and redundant storage respectively).
 
-## Concrete usage instructions.
+## Concrete usage instructions
 
-TODO: Write this section properly
-
-```
-$ mkmanifests make
-$ mkmanifests list | while read line; do
-      hash=$(echo "$line" | cut -d1)
-      path=$(echo "$line" | cut -d2)
-      rsync --progress --ignore-existing "$path" "$HOST:backups/$hash"
-  done
-```
-
-TODO: nice/ionice, sharing SSH connection...
+See the file "backup.sh" for an example of a simple backup system using
+`mkmanifests`.
 
 ## Related work
 
