@@ -23,6 +23,7 @@ import Data.Time (UTCTime(..))
 import Data.Traversable
 import Path
 import System.Directory
+import System.Environment
 
 -------------------------------------------------------------------------------
 -- Configuration
@@ -70,6 +71,10 @@ serialiseManifest =
 serialiseManifestEntry :: (Path Rel a, SHA1) -> T.Text
 serialiseManifestEntry (filename, hash) =
     serialiseHash hash <> "\t" <> T.pack (toFilePath filename)
+
+serialiseAbsoluteEntry :: (Path Abs a, SHA1) -> T.Text
+serialiseAbsoluteEntry (path, hash) =
+    serialiseHash hash <> "\t" <> T.pack (toFilePath path)
 
 serialiseHash :: SHA1 -> T.Text
 serialiseHash = unHash
@@ -127,7 +132,7 @@ getFileHash filepath = do
     return $ SHA1 (T.decodeUtf8 $ BS16.encode digest)
 
 -------------------------------------------------------------------------------
--- Logic
+-- Logic for making manifests
 
 -- Returns:
 --
@@ -169,6 +174,72 @@ mkManifest dir = do
     let manifest' = Manifest $ HMS.fromList entries
     writeManifest dir manifest'
 
-main :: IO ()
-main = mkManifest =<< getWorkingDir
+subcommandMake :: Path Abs Dir -> IO ()
+subcommandMake = mkManifest
 
+-------------------------------------------------------------------------------
+-- Logic for listing files and hashes
+
+getDirFiles :: Path Abs Dir -> IO [(Path Abs File, SHA1)]
+getDirFiles dir = do
+    (manifest, _) <- fromMaybe (emptyManifest, undefined) <$> readManifest dir
+    return $ map (\(path, hash) -> (dir </> path, hash)) $ HMS.toList (unManifest manifest)
+
+getAllFilesMinusRootManifest :: Path Abs Dir -> IO [(Path Abs File, SHA1)]
+getAllFilesMinusRootManifest dir = do
+    (dirs, _) <- listDirectory dir
+    let dirs' = map (dir </>) dirs
+    files <- getDirFiles dir
+    childFiles <- join <$> mapM getAllFiles dirs'
+    return $ files ++ childFiles
+
+getAllFiles :: Path Abs Dir -> IO [(Path Abs File, SHA1)]
+getAllFiles dir = do
+    files <- getAllFilesMinusRootManifest dir
+    rootManifest <- hashRootManifest dir
+    return (rootManifest : files)
+
+hashRootManifest :: Path Abs Dir -> IO (Path Abs File, SHA1)
+hashRootManifest dir = do
+    let path = dir </> manifestFile
+    -- guard =<< lift (doesFileExist $ toFilePath path)
+    hash <- getFileHash path
+    return (path, hash)
+
+subcommandList :: Path Abs Dir -> IO ()
+subcommandList dir = do
+    lines <- getAllFiles dir
+    let output =  T.unlines $ map serialiseAbsoluteEntry lines
+    T.putStrLn output
+
+-------------------------------------------------------------------------------
+-- Plumbing
+
+getDir :: Maybe String -> IO (Path Abs Dir)
+getDir mbPath = do
+    -- TODO: use mbPath is given
+    getWorkingDir
+
+subcommandHelp :: IO ()
+subcommandHelp = T.putStrLn $ T.unlines
+    [ "Usage: mkmanifests <command> [path]"
+    , ""
+    , "Subcommands:"
+    , "    make    Create manifests in the given tree; update existing manifests"
+    , "    list    Using existing manifests, list all files in the tree"
+    , ""
+    , "Typical usage:"
+    , " $ mkmanifests make"
+    , " $ mkmanifests list | while read line; do"
+    , "       hash=$(echo $line | cut -d1)"
+    , "       path=$(echo $line | cut -d2)"
+    , "       rsync --ignore-existing $path \"$HOST:backups/$hash\""
+    , "   done"
+    ]
+
+main :: IO ()
+main = getArgs >>= \args -> case args of
+    ("make":xs) -> subcommandMake =<< getDir (listToMaybe xs)
+    ("list":xs) -> subcommandList =<< getDir (listToMaybe xs)
+    ("help":_)  -> subcommandHelp
+    _           -> subcommandHelp
