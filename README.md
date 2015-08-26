@@ -23,8 +23,8 @@ directory tree under the working directory looks like this:
     └── file7
 ```
 
-Then `mkmanifests` will create a file called ".manifest" in each directory
-including the working directory:
+Then running `mkmanifests make` will create a file called ".manifest" in each
+directory including the working directory:
 
 ```
 .
@@ -71,6 +71,23 @@ file hasn't been modified since the manifest was last updated then the hash
 will be reused. This is important, since hashing is potentially an expensive
 operation.
 
+Running `mkmanifests list` will list all the files under the working directory
+with their hashes as specified in the manifest files on disk:
+
+```
+$ mkmanifests list
+a1056c2d18a9db807b6af4706f5c25f845e2b642	/path/to/.manifest
+d208b2499488547c4a01e41c9db7dc7c549ff86f	/path/to/file1
+9af3e9bfe4ef27448460fbf492f40f285edb8fd0	/path/to/file2
+6ce927e18ca4bc7936be4cd07dbff5120c49a08a	/path/to/file3
+807b6f470a6f9db5c25f845e2b642a1056c2d18a	/path/to/dir1/.manifest
+2e6e2d0e2768271c2dd4154f31d9a34dad45056b	/path/to/dir2/.manifest
+e6bce1faf4317a6c2b7abb8b259752fb55de2686	/path/to/file4
+b8b259752fb55de2686e6bce1faf4317a6c2b7ab	/path/to/file5
+0c86c1dac46113cd8ff85300b402440149b2e7c0	/path/to/file6
+1711c98bad632d5441f56116ec60cebfd77fa5a1	/path/to/file7
+```
+
 ## Motivation
 
 What we're doing is taking a copy of the directory structure of your
@@ -115,7 +132,7 @@ Using a scheme like this for backups has a few advantages.
 - A directory full of files named by their SHA1 hash. Upload with `rsync
   --ignore-existing`. Keep redundant copies of your backups in sync with unison
   or rsync+cron.
-- Amazon S3 and similar. (See the [Note on using Glacier])
+- Amazon S3 and similar. (See the [note on using Glacier](#note-on-using-glacier))
 - Any key-value database. (Eventually-consistent ones are fine too!)
 
 Concerns such as read-availability, write-availability, and data resilience
@@ -124,19 +141,18 @@ consistency, and redundant storage respectively).
 
 ## Concrete usage instructions.
 
-TODO: write me
+TODO: Write this section properly
 
-<!--
-1. Run `mkmanifests` from eg. your home directory.
-2. Run `cat $(find . -name .manifest)` to get the hashes and filenames of all
-   files. Use `rsync --ignore-existing` to transfer everything to your backup
-   server. Unchanged files will not be re-uploaded.
-3. Finally, upload the root manifest, using `sha1sum` to get its name. Remember
-   to add its hash to a file listing your snapshots.
+```
+$ mkmanifests make
+$ mkmanifests list | while read line; do
+      hash=$(echo "$line" | cut -d1)
+      path=$(echo "$line" | cut -d2)
+      rsync --progress --ignore-existing "$path" "$HOST:backups/$hash"
+  done
+```
 
-nice/ionice
-
--->
+TODO: nice/ionice, sharing SSH connection...
 
 ## Related work
 
@@ -158,6 +174,8 @@ interesting alternative backup strategies:
 
 [rsnapshot]: http://rsnapshot.org/
 [zbackup]: http://zbackup.org/
+[ZFS]: http://open-zfs.org/wiki/Main_Page
+[Btrfs]: https://btrfs.wiki.kernel.org/index.php/Main_Page
 
 The above are all good solutions, and may better fit your requirements. I like
 content-addressing as a way of doing deduplication. If you do too, you should
@@ -223,3 +241,6 @@ copy of file listing. Still not ideal...)
   store ownership, permissions, timestamps, links, etc.
 - Support other hashing algorithms?
 - Support ignoring certain files/directories.
+- Add support for running an arbitrary command which will recieve a path and a
+  hash as input over all files in the tree, ensuring that the hash is
+  up-to-date at the time the command is invoked.
