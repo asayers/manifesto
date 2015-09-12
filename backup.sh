@@ -7,6 +7,7 @@
 
 
 HOST="alex@bifrost"
+HOST_SNAPSHOT_FILE="/home/alex/backup/snapshots"
 HOST_LINKS_DIR="/home/alex/backup/blobs"
 LOCAL_LINKS_DIR="/tmp/blobs-$(date +%y-%m-%d-%H-%M-%S)"
 
