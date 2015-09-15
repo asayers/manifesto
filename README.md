@@ -23,70 +23,35 @@ directory tree under the working directory looks like this:
     └── file7
 ```
 
-Then running `mkmanifests make` will create a file called ".manifest" in each
-directory including the working directory:
+Running `mkmanifests my-manifest` will create a manifest file called
+"my-manifest" in the working directory. This file will contain some metadata,
+followed by a recursive listing of all the regular files in the working
+directory, along with the SHA1 hashes of those files.
 
 ```
-.
-├── .manifest
-├── file1
-├── file2
-├── file3
-├── dir1
-│   ├── .manifest
-│   └── file4
-└── dir2
-    ├── .manifest
-    ├── file5
-    ├── file6
-    └── file7
-```
-
-These manifest files contain a list of the files and the SHA1 hashes of those
-files. The files included are:
-
-- Files which are direct children of the manifest's parent directory, excluding
-  the manifest itself;
-- The manifests of directories which are direct children of the manifest's
-  directory.
-
-```
-$ cat dir2/.manifest
-b8b259752fb55de2686e6bce1faf4317a6c2b7ab	file5
-0c86c1dac46113cd8ff85300b402440149b2e7c0	file6
-1711c98bad632d5441f56116ec60cebfd77fa5a1	file7
-```
-
-```
-$ cat ./.manifest
+$ cat my-manifest
+hostname: the-machines-hostname
+manifest root: /path/to/root/
+excludes file:
+timestamp: 2015-09-15-15:22:56
 d208b2499488547c4a01e41c9db7dc7c549ff86f	file1
 9af3e9bfe4ef27448460fbf492f40f285edb8fd0	file2
 6ce927e18ca4bc7936be4cd07dbff5120c49a08a	file3
-807b6f470a6f9db5c25f845e2b642a1056c2d18a	dir1/.manifest
-2e6e2d0e2768271c2dd4154f31d9a34dad45056b	dir2/.manifest
+8460fbf492f40f285edb8fd09af3e9bfe4ef2744	dir1/file4
+b8b259752fb55de2686e6bce1faf4317a6c2b7ab	dir2/file5
+0c86c1dac46113cd8ff85300b402440149b2e7c0	dir2/file6
+1711c98bad632d5441f56116ec60cebfd77fa5a1	dir2/file7
 ```
 
-If a directory contains an existing manifest file, it will be updated. If a
-file hasn't been modified since the manifest was last updated then the hash
-will be reused. This is important, since hashing is potentially an expensive
-operation.
+If the specified manifest file already exists and is valid, it will be updated.
+If a file hasn't been modified since the existing manifest's timestamp then the
+hash will be reused. This is important, since hashing is potentially an
+expensive operation.
 
-Running `mkmanifests list` will list all the files under the working directory
-with their hashes as specified in the manifest files on disk:
+There are a couple of command-line switches:
 
-```
-$ mkmanifests list
-a1056c2d18a9db807b6af4706f5c25f845e2b642	/path/to/.manifest
-d208b2499488547c4a01e41c9db7dc7c549ff86f	/path/to/file1
-9af3e9bfe4ef27448460fbf492f40f285edb8fd0	/path/to/file2
-6ce927e18ca4bc7936be4cd07dbff5120c49a08a	/path/to/file3
-807b6f470a6f9db5c25f845e2b642a1056c2d18a	/path/to/dir1/.manifest
-2e6e2d0e2768271c2dd4154f31d9a34dad45056b	/path/to/dir2/.manifest
-e6bce1faf4317a6c2b7abb8b259752fb55de2686	/path/to/file4
-b8b259752fb55de2686e6bce1faf4317a6c2b7ab	/path/to/file5
-0c86c1dac46113cd8ff85300b402440149b2e7c0	/path/to/file6
-1711c98bad632d5441f56116ec60cebfd77fa5a1	/path/to/file7
-```
+- `-v` for verbose mode
+- `-e<filepath>` to specify a file containing directories to ignore
 
 ## Motivation
 
