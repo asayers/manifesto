@@ -130,7 +130,7 @@ Manifest files are designed to be easy to process in bash. For example, suppose
 you wanted to copy every file in "my-manifest" to "/mnt/backup/<hash>"; you
 could simply do:
 
-```
+```bash
 cat my-manifest                  \            # Read the manifest
     | sed -n '/------------/,$p' \            # Remove the metadata
     | tail -n +2                 \            # Remove the divider
@@ -147,7 +147,7 @@ in the same directory, and (5) ensures that relevant directories exit.
 **Note that this script is only meant to give an idea of how to work with
 manifest files. See below.**
 
-```
+```bash
 #! /bin/sh
 
 set -euf -o pipefail
