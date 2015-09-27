@@ -1,39 +1,24 @@
 # `manifesto`
 
-`manifesto` is a tool for making a copy of your directory structure in the
-form of manifest files. Files can then be written to a content-addressable
-store without losing information about the directory structure, giving a simple
-way of doing incremental snapshotted backups.
+`manifesto` is a tool for creating and updating manifest files. These manifests
+allow you to write your files to a content-addressable store store without
+losing information about the original directory structure. `manifesto` is
+indended to be a component in a larger backup strategy; specifically, it
+provides a simple deduplication layer when making incremental snapshotted
+backups.
 
 ## Behaviour
 
-The behaviour of this program is best conveyed with an example. Suppose the
-directory tree under the working directory looks like this:
+I think the behaviour of this program is best conveyed by an example:
 
 ```
-.
-├── file1
-├── file2
-├── file3
-├── dir1
-│   └── file4
-└── dir2
-    ├── file5
-    ├── file6
-    └── file7
-```
-
-Running `manifesto my-manifest` will create a manifest file called
-"my-manifest" in the working directory. This file will contain some metadata,
-followed by a recursive listing of all the regular files in the working
-directory, along with the SHA1 hashes of those files.
-
-```
-$ cat my-manifest
-hostname: the-machines-hostname
-manifest root: /path/to/root/
-excludes file:
+$ manifesto foobar.manifest
+$ cat foobar.manifest
+hostname: my-hostname
+manifest root: /path/to/working/directory/
+excludes:
 timestamp: 2015-09-15-15:22:56
+------------
 d208b2499488547c4a01e41c9db7dc7c549ff86f	file1
 9af3e9bfe4ef27448460fbf492f40f285edb8fd0	file2
 6ce927e18ca4bc7936be4cd07dbff5120c49a08a	file3
@@ -43,15 +28,19 @@ b8b259752fb55de2686e6bce1faf4317a6c2b7ab	dir2/file5
 1711c98bad632d5441f56116ec60cebfd77fa5a1	dir2/file7
 ```
 
+Invoking `manifesto` with an output path creates a "manifest" file. This
+contains some metadata, followed by a recursive list of all the regular files
+in the working directory, along with their SHA1 hashes.
+
 If the specified manifest file already exists and is valid, it will be updated.
-If a file hasn't been modified since the existing manifest's timestamp then the
-hash will be reused. This is important, since hashing is potentially an
-expensive operation.
+This means that if a file hasn't been modified since the existing manifest was
+created then the hash will be reused. This makes updating a manifest very fast
+when done regularly.
 
 There are a couple of command-line switches:
 
 - `-v` for verbose mode
-- `-e<filepath>` to specify a file containing directories to ignore
+- `-e<filepath>` to specify a file containing a list of directories to ignore
 
 ## Motivation
 
@@ -164,6 +153,7 @@ are some nice features which it *doesn't* support:
 - Block-level deduplication. This would be nice, but it's tough to get it
   right.
 
+<!--
 ## Justifications for technical decisions
 
 ### Why create many manifest files rather than just one?
@@ -180,6 +170,7 @@ automatically reuse the existing ones.
 However, keeping a single manifest file at the root of the tree is not a bad
 idea - it prevents your filesystem from becoming littered with manifest files.
 Perhaps I'll make this behaviour available under a command-line flag.
+-->
 
 ## Note on using Glacier
 
@@ -190,12 +181,11 @@ copy of file listing. Still not ideal...)
 
 - It should be possible to parallelise the descents into different branches of
   the directory tree.
-- Perhaps put all the manifests in the same place, but with different
-  filenames; or just have a single manifest.
 - In order to properly reproduce the original directory structure we need to
   store ownership, permissions, timestamps, links, etc.
 - Support other hashing algorithms?
-- Support ignoring certain files/directories.
+- Improve support for ignoring certain files/directories.
 - Add support for running an arbitrary command which will recieve a path and a
   hash as input over all files in the tree, ensuring that the hash is
-  up-to-date at the time the command is invoked.
+  up-to-date at the time the command is invoked?
+- Proper command-line flag parsing
