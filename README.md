@@ -1,6 +1,6 @@
-# `mkmanifests`
+# `manifesto`
 
-`mkmanifests` is a tool for making a copy of your directory structure in the
+`manifesto` is a tool for making a copy of your directory structure in the
 form of manifest files. Files can then be written to a content-addressable
 store without losing information about the directory structure, giving a simple
 way of doing incremental snapshotted backups.
@@ -23,7 +23,7 @@ directory tree under the working directory looks like this:
     └── file7
 ```
 
-Running `mkmanifests my-manifest` will create a manifest file called
+Running `manifesto my-manifest` will create a manifest file called
 "my-manifest" in the working directory. This file will contain some metadata,
 followed by a recursive listing of all the regular files in the working
 directory, along with the SHA1 hashes of those files.
@@ -70,7 +70,7 @@ The intended use case is for putting your files into a content-addressable
 store without losing information about the directory structure - you just
 upload the manifests along with your other files. If you want to efficiently
 explore your backups, the addressing schemes should be the same. At the moment
-`mkmanifests` only supports SHA1.
+`manifesto` only supports SHA1.
 
 The simplest example of this would be to just upload all your files to a
 directory on your backup server, using their SHA1 hash as the filename. So long
@@ -107,7 +107,7 @@ consistency, and redundant storage respectively).
 ## Concrete usage instructions
 
 See the file "backup.sh" for an example of a simple backup system using
-`mkmanifests`.
+`manifesto`.
 
 ## Related work
 
@@ -149,14 +149,14 @@ also investigate the following dedicated content-addressable stores (CASes):
 [Keep]: https://arvados.org/projects/arvados/wiki/Keep
 [blobsnap]: https://github.com/tsileo/blobsnap
 
-The chief advantage of using `mkmanifests` over the above is *simplicity*. You
+The chief advantage of using `manifesto` over the above is *simplicity*. You
 don't need to install any server software, there's no protocol for moving data
 around, there are no proprietary data formats. All you need is an S3 bucket to
 put your files in. If you've read the "Behaviour" section above, then you
-already understand *everything* `mkmanifests` does, including its on-disk
+already understand *everything* `manifesto` does, including its on-disk
 format.
 
-You can use `mkmanifests` to build a pretty solid backup system. However, there
+You can use `manifesto` to build a pretty solid backup system. However, there
 are some nice features which it *doesn't* support:
 
 - Encryption. We assume the storage is private, which is probably a bad
