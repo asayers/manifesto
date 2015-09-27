@@ -81,13 +81,44 @@ Using a scheme like this for backups has a few advantages.
   retrievable using that name. This allows you to use all manner of fancy
   distributed databases, depending on your needs.
 
+You can use `manifesto` to build a pretty solid backup system. However, it's
+not the goal to provide a complete turn-key backup solution. Functionality
+which you probably want to add yourself includes:
+
+- Compression
+- Encryption
+- Transferring data off-site
+
+<a name="stumbling-blocks"></a>
+There are also some features which you might want in a backup system which
+`manifesto` actually makes difficult to achieve. Consider these when deciding
+whether to use it.
+
+- Block-level deduplication. This is nice, but it's tough to get it right.
+  `manifesto` is designed to provide the deduplication layer of a backup
+  strategy, and it uses file-level dedup, so if you need block-level dedup you
+  need to look [elsewhere][zbackup].
+- Rock-solid encryption. It's expected that users will encrypt files before
+  moving them to untrusted storage, and that this should provide a decent level
+  of protection if done right. However, it's worth noting that if you're using
+  `manifesto` then an attacker probably has access to the SHA1 of the plaintext
+  of every file. Depending on the cypher you use, this may be significant. If
+  in doubt, ask a cryptographer!
+- Hashes other than SHA1. Perhaps your object-store of choice uses something
+  other than SHA1. This is a shame, because it would be convenient to get the
+  hashes from the manifests and avoid recomputing them. If this is the case,
+  open an issue or submit a pull request.
+
 ## Options for object storage
 
 - A directory full of files named by their SHA1 hash. Upload with `rsync
   --ignore-existing`. Keep redundant copies of your backups in sync with unison
   or rsync+cron.
-- Amazon S3 and similar. (See the [note on using Glacier](#note-on-using-glacier))
+- Amazon S3, Microsoft Azure, Rackspace Managed Cloud, Backblaze B2, etc.
+  (However, see the [note on using Glacier](#note-on-using-glacier))
 - Any key-value database. (Eventually-consistent ones are fine too!)
+- Systems explicitly designed as content-addressable stores (although most of
+  these make `manifesto` redundant).
 
 Concerns such as read-availability, write-availability, and data resilience
 should be handled at this level (using techniques such as caching, eventual
@@ -95,8 +126,79 @@ consistency, and redundant storage respectively).
 
 ## Concrete usage instructions
 
-See the file "backup.sh" for an example of a simple backup system using
-`manifesto`.
+Manifest files are designed to be easy to process in bash. For example, suppose
+you wanted to copy every file in "my-manifest" to "/mnt/backup/<hash>"; you
+could simply do:
+
+```
+cat my-manifest                  \            # Read the manifest
+    | sed -n '/------------/,$p' \            # Remove the metadata
+    | tail -n +2                 \            # Remove the divider
+    | while read fhash fpath; do              # Loop over the lines
+    cp "$fpath" "/mnt/backup/content/$fhash"  # Copy the files
+done
+```
+
+As a slightly more sophisticated example, the following script does the same
+thing, but also (1) copies the manifest itself, (2) compresses and encrypts all
+files, (3) avoids overwriting existing files, (4) avoids putting too many files
+in the same directory, and (5) ensures that relevant directories exit.
+
+**Note that this script is only meant to give an idea of how to work with
+manifest files. See below.**
+
+```
+#! /bin/sh
+
+set -euf -o pipefail
+
+remove_header () {
+    sed -n '/------------/,$p' | tail -n +2
+}
+
+process_file () {
+    lzma --compress | gpg --encrypt --recipient "Alex"
+}
+
+cat "$1" | remove_header | while read fhash fpath; do
+    shorthash=$(echo "$fhash" | head -c 2)
+    bpath="/mnt/backup/content/$shorthash/$fhash"
+    if [ ! -f "$bpath" ]; then
+        mkdir -p "$(dirname $bpath)"
+        cat "$fpath" | process_file > "$bpath"
+    fi
+done
+
+mpath="/mnt/backup/manifests/$(hostname)-$(date '+%Y-%m-%d')"
+mkdir -p $(dirname $mpath)
+cat "$1" | process_file > "$mpath"
+```
+
+Now you can view a recorded manifest (or the files it references) by doing
+
+```
+$ cat /mnt/backup/manifests/foobar-2015-09-28 | gpg -d | lzma -d | less
+```
+
+Further to the warning above, I'd just like to reiterate my cowardly
+disclaimer. When it comes to backups, people's requirements differ a lot, so
+you need to figure out a scheme which suits yours. Hopefully `manifesto` can
+be a part of that.
+
+In fact, the scheme implemented by the above example script is probably not
+what you want. For instance, it assumes that "/mnt/backup" is always mounted,
+and writes to the local disk when it isn't. These writes are then masked when
+the mount is restored, effectively spliting your data across two repos. This is
+no good at all - very dangerous!
+
+Personally I write my backups to a local directory and then rsync the data away
+when I have a connection. This allows me to continue taking snapshots even in
+the absence of the internet - the local backup directory is like a buffer. When
+I transfer the data to a remote location, I leave behind an empty file to
+prevent it from being recreated in the buffer.
+
+However, like I said: I don't really want to be giving advice about how to do
+backups. Please figure out a scheme which satisfies *your* needs!
 
 ## Related work
 
@@ -125,11 +227,12 @@ The above are all good solutions, and may better fit your requirements. I like
 content-addressing as a way of doing deduplication. If you do too, you should
 also investigate the following dedicated content-addressable stores (CASes):
 
-- [Venti] and Fossil, the Plan9 filesystems.
+- [Venti] and Fossil, the Plan9 filesystems. Real forerunners in this space.
 - [Tahoe-LAFS], a CAS with an nice authority model.
-- [IPFS], a distributed CAS. This may not be appropriate for making backups,
-  but it's interesting.
-- Some others that I don't know much about: [Camlistore], [Keep], [blobsnap].
+- [IPFS], a public distributed CAS. This may not be appropriate for making
+  backups, but it's interesting.
+- Some others I've heard of but don't know much about: [Camlistore], [Keep],
+  [blobsnap].
 
 [Venti]: http://doc.cat-v.org/plan_9/4th_edition/papers/venti/
 [IPFS]: http://ipfs.io/
@@ -138,20 +241,20 @@ also investigate the following dedicated content-addressable stores (CASes):
 [Keep]: https://arvados.org/projects/arvados/wiki/Keep
 [blobsnap]: https://github.com/tsileo/blobsnap
 
-The chief advantage of using `manifesto` over the above is *simplicity*. You
-don't need to install any server software, there's no protocol for moving data
-around, there are no proprietary data formats. All you need is an S3 bucket to
-put your files in. If you've read the "Behaviour" section above, then you
-already understand *everything* `manifesto` does, including its on-disk
-format.
+The chief advantages `manifesto` has over the above are *simplicity* and
+*flexibility*.
 
-You can use `manifesto` to build a pretty solid backup system. However, there
-are some nice features which it *doesn't* support:
+Simplicity: You don't need to install any server software; there's no
+protocol for moving data around; there are no special data formats. If you've
+read the "Behaviour" section above, then you already understand *everything*
+`manifesto` does, including its on-disk format.
 
-- Encryption. We assume the storage is private, which is probably a bad
-  assumption. Maybe you can write a privacy layer on top?
-- Block-level deduplication. This would be nice, but it's tough to get it
-  right.
+Flexibility: You can store your data virtually anywhere, and transfer it by any
+means you like. If you have requirements which the authors of turn-key backup
+solutions didn't anticipate, you could be in for a bad time. On the other hand,
+because its scope is limited, you can probably adjust your strategy and
+continue using `manifesto` - hopefully it won't get in your way (although see
+[here](#stumbling-blocks) for ways it might).
 
 <!--
 ## Justifications for technical decisions
