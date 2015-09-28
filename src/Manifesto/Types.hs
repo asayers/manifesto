@@ -3,15 +3,14 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Manifesto.Types
-    ( Header(..), _Header
-    , Entry(..), _Entry
+    ( Header(..)
+    , Entry(..)
     , Exclusions
-    , Manifest(..), _Manifest, lookupHash
+    , Manifest(..), lookupHash
     , LastModified
     , Hostname, getHostname
-    , SHA1(..), _SHA1, getSHA1
+    , SHA1(..), getSHA1
     , Stats, hits, misses
-    , headerSeparator
     ) where
 
 import Control.Lens
@@ -20,7 +19,6 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as BS16
 import Data.Hashable
 import qualified Data.HashMap.Strict as HMS
-import Data.Monoid
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Data.Time
@@ -76,77 +74,6 @@ getSHA1 :: Path Abs File -> IO SHA1
 getSHA1 filepath = do
     digest <- SHA1.hash <$> BS.readFile (toFilePath filepath)
     return $! SHA1 (T.decodeUtf8 $ BS16.encode digest)
--------------------------------------------------------------------------------
--- Serialisation
-
-_Header :: Prism' T.Text Header
-_Header = prism' pp parse
-  where
-    hostLabel     = "hostname: "
-    rootLabel     = "manifest root: "
-    excludesLabel = "excludes: "
-    tsLabel       = "timestamp: "
-
-    pp (Header host root excludes ts) = T.unlines $
-        [ hostLabel <> host
-        , rootLabel <> T.pack (toFilePath root)
-        , excludesLabel <> T.intercalate ", " excludes
-        , tsLabel <> review _LastModified ts
-        ]
-
-    parse txt = do
-        [hostLn, rootLn, excludesLn, tsLn] <- return (T.lines txt)
-        host <- T.stripPrefix hostLabel hostLn
-        root <- parseAbsDir . T.unpack =<< T.stripPrefix rootLabel rootLn
-        excludes <- T.splitOn "," <$> T.stripPrefix excludesLabel excludesLn
-        ts   <- preview _LastModified =<< T.stripPrefix tsLabel tsLn
-        return $ Header host root excludes ts
-
-_Entry :: Prism' T.Text Entry
-_Entry = prism' pp parse
-  where
-    pp (Entry path filehash) =
-        review _SHA1 filehash <> "\t" <> T.pack (toFilePath path)
-
-    parse txt = do
-        let [rawHash, path] = T.splitOn "\t" txt
-        filehash <- preview _SHA1 rawHash
-        filepath <- parseRelFile (T.unpack path)
-        return $ Entry filepath filehash
-
-headerSeparator :: T.Text
-headerSeparator = "------------\n"
-
-_Manifest :: Prism' T.Text Manifest
-_Manifest = prism' pp parse
-  where
-    pp m = mconcat
-        [ review _Header (_mHeader m)
-        , headerSeparator
-        , T.unlines (map (review _Entry . uncurry Entry) (HMS.toList (_mEntries m)))
-        ]
-
-    parse txt = do
-        let (headerTxt, entriesTxt) = T.breakOn headerSeparator txt
-        let entriesTxt' = T.drop (T.length headerSeparator) entriesTxt
-        let toPair (Entry p h) = (p,h)
-        header <- preview _Header headerTxt
-        entries <- HMS.fromList <$>
-            mapM (fmap toPair . preview _Entry) (T.lines entriesTxt')
-        return $ Manifest header entries
-
-_LastModified :: Prism' T.Text LastModified
-_LastModified = prism'
-    (T.pack . formatTime defaultTimeLocale fmt)
-    (parseTimeM True defaultTimeLocale fmt . T.unpack)
-  where
-    fmt = "%F-%X"
-
--- TODO: Check that it looks like a hash
-_SHA1 :: Prism' T.Text SHA1
-_SHA1 = prism' unHash (Just . SHA1)
-
-
 
 -------------------------------------------------------------------------------
 -- Machinery for logging while computing the new manifest

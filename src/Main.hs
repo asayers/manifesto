@@ -18,8 +18,9 @@ import System.Environment
 import System.IO (hClose, Handle)
 import System.IO.Temp (withSystemTempFile)
 
-import Manifesto.Types
 import Manifesto.FileList
+import Manifesto.Serialize
+import Manifesto.Types
 
 
 -------------------------------------------------------------------------------
