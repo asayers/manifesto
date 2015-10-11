@@ -6,9 +6,9 @@ set -euf -o pipefail
 ###############################################################################
 # Config
 
-LOCAL_REPO="$HOME/Backup2"
+LOCAL_REPO="$HOME/Backup"
 MANIFEST_PATH="$1"
-GPG_RECIPIENT="Alex"
+GPG_RECIPIENT="alex.sayers@gmail.com"
 
 
 ###############################################################################
@@ -35,7 +35,7 @@ restore_file () {
 backup_manifest_contents () {
     cat "$MANIFEST_PATH" | remove_header | while read fhash fpath; do
         shorthash=$(echo "$fhash" | head -c 2)
-        bpath="$LOCAL_REPO/content/$shorthash/$fhash"
+        bpath="$LOCAL_REPO/content/$shorthash/$fhash.xz.gpg"
         if [ ! -f "$bpath" ]; then
             echo "Writing $bpath"
             mkdir -p "$(dirname $bpath)"
@@ -47,7 +47,7 @@ backup_manifest_contents () {
 # TODO (asayers): Use the hostname and timestamp from the manifest
 backup_manifest_file () {
     snapshot_name="$(hostname)-$(date '+%Y-%m-%d')"
-    mpath="$LOCAL_REPO/manifests/$snapshot_name"
+    mpath="$LOCAL_REPO/manifests/$snapshot_name.xz.gpg"
     echo "Writing $mpath"
     mkdir -p "$(dirname $mpath)"
     cat "$MANIFEST_PATH" | process_file > "$mpath"
@@ -66,6 +66,5 @@ recover_file () {
 # Entry point
 
 if [ -z "$1" ]; then echo "Must specify manifest file"; exit; fi
-if [ ! -d "$LOCAL_REPO" ]; then initialize_repo; fi
 backup_manifest_contents
 backup_manifest_file

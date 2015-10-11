@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
@@ -6,26 +5,28 @@ module Manifesto.Types
     ( Header(..), _Header
     , Entry(..), _Entry
     , Exclusions
-    , Manifest(..), _Manifest, lookupHash
+    , Manifest(..), mHeader, mEntries
     , LastModified
     , Hostname, getHostname
-    , SHA1(..), _SHA1, getSHA1
     , Stats, hits, misses
-    , headerSeparator
+    , headerParser
+    , entryParser
+    , manifestPrinter
     ) where
 
 import Control.Lens
-import qualified Crypto.Hash.SHA1 as SHA1
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Base16 as BS16
-import Data.Hashable
-import qualified Data.HashMap.Strict as HMS
+import Control.Monad
 import Data.Monoid
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
 import Data.Time
+import qualified Network.BSD as N
 import Path
-import System.Process
+import Pipes
+import Pipes.Parse
+import qualified Pipes.Prelude as P
+import qualified System.IO as IO
+
+import Manifesto.Hash (SHA1, _SHA1)
 
 -------------------------------------------------------------------------------
 -- Types
@@ -44,38 +45,26 @@ data Entry = Entry
 
 type Exclusions = [T.Text] -- TODO (asayers): Make this more flexible
 
-data Manifest = Manifest
-    { _mHeader   :: !Header
-    , _mEntries  :: !(HMS.HashMap (Path Rel File) SHA1)
-    } deriving (Eq, Show)
+data Manifest m = Manifest
+    { _mHeader  :: !Header
+    , _mEntries :: !(Producer Entry m ())
+    }
 
 type LastModified = UTCTime
 type Hostname = T.Text
 
--- TODO: Use a better type
-newtype SHA1 = SHA1 { unHash :: T.Text } deriving (Eq, Show)
+makeLenses ''Manifest
 
--- TODO: Merge upstream
-instance Hashable (Path a b) where
-    hashWithSalt s = hashWithSalt s . toFilePath
-
-lookupHash :: Path Rel File -> Manifest -> Maybe SHA1
-lookupHash path = HMS.lookup path . _mEntries
-
-rebaseManifest :: Path Abs Dir -> Manifest -> Manifest
+-- TODO (asayers)
+rebaseManifest :: Path Abs Dir -> Manifest m -> Manifest m
 rebaseManifest = undefined
 
 -------------------------------------------------------------------------------
 -- Constructors
 
 getHostname :: IO Hostname
-getHostname =
-    T.concat . T.lines . T.pack <$> readProcess "hostname" ["-s"] ""
+getHostname = T.pack <$> N.getHostName
 
-getSHA1 :: Path Abs File -> IO SHA1
-getSHA1 filepath = do
-    digest <- SHA1.hash <$> BS.readFile (toFilePath filepath)
-    return $! SHA1 (T.decodeUtf8 $ BS16.encode digest)
 -------------------------------------------------------------------------------
 -- Serialisation
 
@@ -109,31 +98,10 @@ _Entry = prism' pp parse
         review _SHA1 filehash <> "\t" <> T.pack (toFilePath path)
 
     parse txt = do
-        let [rawHash, path] = T.splitOn "\t" txt
+        [rawHash, path] <- return $ T.splitOn "\t" txt
         filehash <- preview _SHA1 rawHash
         filepath <- parseRelFile (T.unpack path)
         return $ Entry filepath filehash
-
-headerSeparator :: T.Text
-headerSeparator = "------------\n"
-
-_Manifest :: Prism' T.Text Manifest
-_Manifest = prism' pp parse
-  where
-    pp m = mconcat
-        [ review _Header (_mHeader m)
-        , headerSeparator
-        , T.unlines (map (review _Entry . uncurry Entry) (HMS.toList (_mEntries m)))
-        ]
-
-    parse txt = do
-        let (headerTxt, entriesTxt) = T.breakOn headerSeparator txt
-        let entriesTxt' = T.drop (T.length headerSeparator) entriesTxt
-        let toPair (Entry p h) = (p,h)
-        header <- preview _Header headerTxt
-        entries <- HMS.fromList <$>
-            mapM (fmap toPair . preview _Entry) (T.lines entriesTxt')
-        return $ Manifest header entries
 
 _LastModified :: Prism' T.Text LastModified
 _LastModified = prism'
@@ -142,9 +110,50 @@ _LastModified = prism'
   where
     fmt = "%F-%X"
 
--- TODO: Check that it looks like a hash
-_SHA1 :: Prism' T.Text SHA1
-_SHA1 = prism' unHash (Just . SHA1)
+manifestPrinter :: Monad m => Manifest m -> Producer T.Text m ()
+manifestPrinter (Manifest header entries) = do
+    headerPrinter header
+    entries >-> P.map (review _Entry)
+
+hHostLabel, hRootLabel, hExcludesLabel, hTsLabel, hSeparator :: T.Text
+hHostLabel     = "hostname: "
+hRootLabel     = "manifest root: "
+hExcludesLabel = "excludes: "
+hTsLabel       = "timestamp: "
+hSeparator     = "------------"
+
+headerPrinter :: Monad m => Header -> Producer T.Text m ()
+headerPrinter (Header host root excludes ts) = do
+    yield $ hHostLabel <> host
+    yield $ hRootLabel <> T.pack (toFilePath root)
+    yield $ hExcludesLabel <> T.intercalate ", " excludes
+    yield $ hTsLabel <> review _LastModified ts
+    yield $ hSeparator
+
+headerParser :: Monad m => Parser T.Text m (Maybe Header)
+headerParser = do
+    hostnameTxt  <- draw
+    rootTxt      <- draw
+    excludesTxt  <- draw
+    timestampTxt <- draw
+    _separator   <- draw
+
+    let hostname  = T.stripPrefix hHostLabel =<< hostnameTxt
+    let root      = parseAbsDir . T.unpack =<< T.stripPrefix hRootLabel =<< rootTxt
+    let excludes  = fmap (T.splitOn ",") . T.stripPrefix hExcludesLabel =<< excludesTxt
+    let timestamp = preview _LastModified =<< T.stripPrefix hTsLabel =<< timestampTxt
+
+    return $ Header <$> hostname <*> root <*> excludes <*> timestamp
+
+entryParser :: MonadIO m => Pipe T.Text Entry m ()
+entryParser = forever $ do
+    entryTxt <- await
+    case preview _Entry entryTxt of
+        Nothing ->
+            let err = "Failed to parse entry: " ++ T.unpack entryTxt
+            in liftIO $ IO.hPutStrLn IO.stderr err
+        Just x ->
+            yield x
 
 
 

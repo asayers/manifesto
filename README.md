@@ -152,33 +152,40 @@ manifest files. See below.**
 
 set -euf -o pipefail
 
+BACKUP_DIR="/mnt/backup"
+GPG_KEY="alex.sayers@gmail.com"
+
 remove_header () {
     sed -n '/------------/,$p' | tail -n +2
 }
 
 process_file () {
-    lzma --compress | gpg --encrypt --recipient "Alex"
+    lzma --compress | gpg --encrypt --recipient "$GPG_KEY"
 }
 
 cat "$1" | remove_header | while read fhash fpath; do
     shorthash=$(echo "$fhash" | head -c 2)
-    bpath="/mnt/backup/content/$shorthash/$fhash"
+    bpath="$BACKUP_DIR/content/$shorthash/$fhash.xz.gpg"
     if [ ! -f "$bpath" ]; then
         mkdir -p "$(dirname $bpath)"
         cat "$fpath" | process_file > "$bpath"
     fi
 done
 
-mpath="/mnt/backup/manifests/$(hostname)-$(date '+%Y-%m-%d')"
-mkdir -p $(dirname $mpath)
+mname="$(hostname)-$(date '+%Y-%m-%d')"
+mpath="$BACKUP_DIR/manifests/$mname.xz.gpg"
+mkdir -p "$(dirname $mpath)"
 cat "$1" | process_file > "$mpath"
 ```
 
-Now you can view a recorded manifest (or the files it references) by doing
+Now you can view the contents of any stored file by doing, for instance:
 
 ```
-$ cat /mnt/backup/manifests/foobar-2015-09-28 | gpg -d | lzma -d | less
+$ cat /mnt/backup/content/d2/d2642480a0d3ba5c42fde0fd6d274dac87e5d141.xz.gpg | gpg -d | lzma -d | less
 ```
+
+(Assuming your keyring contains the private key for the `$GPG_KEY` used when
+creating the backup.)
 
 Further to the warning above, I'd just like to reiterate my cowardly
 disclaimer. When it comes to backups, people's requirements differ a lot, so
@@ -197,8 +204,12 @@ the absence of the internet - the local backup directory is like a buffer. When
 I transfer the data to a remote location, I leave behind an empty file to
 prevent it from being recreated in the buffer.
 
-However, like I said: I don't really want to be giving advice about how to do
-backups. Please figure out a scheme which satisfies *your* needs!
+Also, a note on using GPG in the way demonstrated above: be aware that the
+identity of the public key used when creating the backup is visible to anyone
+with access to the encrypted data.
+
+However, like I said: I don't really want to be telling anyone how they should
+do their backups. Please figure out a scheme which satisfies *your* needs!
 
 ## Related work
 
