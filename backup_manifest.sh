@@ -19,11 +19,11 @@ remove_header () {
 }
 
 process_file () {
-    lzma --compress | gpg --encrypt --recipient "$GPG_RECIPIENT"
+    xz --compress | gpg --encrypt --recipient "$GPG_RECIPIENT"
 }
 
 restore_file () {
-    gpg --decrypt | lzma --decompress
+    gpg --decrypt | xz --decompress
 }
 
 
