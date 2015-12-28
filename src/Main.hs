@@ -26,27 +26,13 @@ parseOpts = Options
         (long "exclude" <> short 'e' <> help "Path to file containing excludes"
         <> metavar "EXCLUDEFILE")
     parseVerbose = switch
-        (long "verbose" <> short 'v' <> help "Whether to be verbose")
+        (long "verbose" <> short 'v' <> help "Show verbose output")
 
 helpText :: InfoMod Options
 helpText = mconcat
     [ fullDesc
     , progDesc "Update the manifest at TARGET"
     , header "manifesto - incrementally compute the hashes of all files below the working directory"
-    ]
-
-subcommandHelp :: IO ()
-subcommandHelp = T.putStrLn $ T.unlines
-    [ "Usage: mkmanifests <path>"
-    , ""
-    , "Write a manifest of the working directory tree to the given path. If a"
-    , "manifest file already exists at that location, update it."
-    , ""
-    , "Typical usage:"
-    , " $ manifesto mfst"
-    , " $ cat mfst | tail -n +6 | while read fhash fpath; do"
-    , "       rsync --ignore-existing $fpath \"$HOST:backups/$fhash\""
-    , "   done"
     ]
 
 -- TODO (asayers): When path is "-", stream to stdout
