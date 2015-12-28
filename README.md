@@ -9,7 +9,24 @@ backups.
 
 ## Behaviour
 
-I think the behaviour of this program is best conveyed by an example:
+Invoking `manifesto` produces a *manifest* file at the specified location. This
+file contains a recursive listing of all the regular files in the working
+directory and the SHA1 sums of those files. Manifest files take the following
+form:
+
+```
+<metadata-key>: <metadata-value>
+<metadata-key>: <metadata-value>
+------------
+<sha1>	<path>
+<sha1>	<path>
+<sha1>	<path>
+[...]
+```
+
+Thus the outout of `manifesto foobar.manifest` is almost identical to `sha1sum
+$(find . -type f) > foobar.manifest`, with the addition of some metadata. A
+concrete example is the following:
 
 ```
 $ manifesto foobar.manifest
@@ -28,19 +45,21 @@ b8b259752fb55de2686e6bce1faf4317a6c2b7ab	dir2/file5
 1711c98bad632d5441f56116ec60cebfd77fa5a1	dir2/file7
 ```
 
-Invoking `manifesto` with an output path creates a "manifest" file. This
-contains some metadata, followed by a recursive list of all the regular files
-in the working directory, along with their SHA1 hashes.
+So what makes `manifesto` better than a combination of trusty `find` and
+`sha1sum`? The difference is that `manifesto` can reuse existing manifests,
+simply copying over the hashes of files which haven't changed since the
+manifest was created. This makes updating a manifest very fast when done
+regularly.
 
-If the specified manifest file already exists and is valid, it will be updated.
-This means that if a file hasn't been modified since the existing manifest was
-created then the hash will be reused. This makes updating a manifest very fast
-when done regularly.
+Concretely: if the specified manifest file already exists and is valid, it will
+be updated, rather than simply overwritten.
 
-There are a couple of command-line switches:
+The program also accepts a few command-line options:
 
-- `-v` for verbose mode
-- `-e<filepath>` to specify a file containing a list of directories to ignore
+- `-h,--help`:                  Show this help text
+- `-e,--exclude <excludefile>`: Path to file containing excludes
+- `-v,--verbose`:               Give verbose output
+
 
 ## Motivation
 
@@ -227,7 +246,7 @@ interesting alternative backup strategies:
   files (maildir works fine with file-level dedup though).
 - [ZFS]/[Btrfs]. If your backup machine has one of these filesystems, it might
   be better to just mirror your files with rsync and use the native
-  snapshotting capabilities.
+  snapshotting capabilities - or even better, use ZFS-send/recieve.
 
 [rsnapshot]: http://rsnapshot.org/
 [zbackup]: http://zbackup.org/
