@@ -56,8 +56,8 @@ type Hostname = T.Text
 makeLenses ''Manifest
 
 -- TODO (asayers)
-rebaseManifest :: Path Abs Dir -> Manifest m -> Manifest m
-rebaseManifest = undefined
+-- rebaseManifest :: Path Abs Dir -> Manifest m -> Manifest m
+-- rebaseManifest = undefined
 
 -------------------------------------------------------------------------------
 -- Constructors

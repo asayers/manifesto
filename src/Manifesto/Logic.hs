@@ -43,7 +43,7 @@ createEntries
 createEntries oldManifests0 header =
     flip evalStateT oldManifests0 $ forever $ do
         (filepath, lastModified) <- lift await
-        let errMsg e = "error: " ++ toFilePath filepath ++ ": " ++ show e
+        let errMsg e = "error:    " ++ toFilePath filepath ++ ": " ++ show e
         hsh <- catchIOError (Just <$> getHash filepath lastModified)
                 (\e -> liftIO (IO.hPutStrLn IO.stderr $ errMsg e) >> return Nothing)
         maybe (return ()) (lift . yield . Entry filepath) hsh
@@ -57,7 +57,7 @@ createEntries oldManifests0 header =
         put $ zipWith (set mEntries) (map fst xs) oldManifests
         let existingHash = msum $ map snd xs
         liftIO $ putStrLn $ (if isJust existingHash
-                            then "hit:   " else "miss:  ")
+                            then "skipping: " else "hashing: ")
                             ++ toFilePath absFilepath
         let computeHash = hashFile absFilepath
         hsh <- maybe computeHash return existingHash

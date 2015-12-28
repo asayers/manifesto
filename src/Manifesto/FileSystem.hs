@@ -111,7 +111,7 @@ regularDescendentsOf rootPath exclusions =
     go path = do
         children <- L.sort <$> P.toListM (every (childOf path))
         forM_ children $ \fp -> do
-            let skip = liftIO $ putStrLn ("skip:  " ++ fp)
+            let skip = liftIO $ putStrLn ("ignoring: " ++ fp)
             fsNode <- liftIO $ getFSNode fp
             case fsNode of
                 _ | exclusions `exclude` fp  -> skip

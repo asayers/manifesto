@@ -36,8 +36,10 @@ backup_manifest_contents () {
     cat "$MANIFEST_PATH" | remove_header | while read fhash fpath; do
         shorthash=$(echo "$fhash" | head -c 2)
         bpath="$LOCAL_REPO/content/$shorthash/$fhash.xz.gpg"
-        if [ ! -f "$bpath" ]; then
-            echo "Writing $bpath"
+        if [ -f "$bpath" ]; then
+            echo "Skipping: $bpath"
+        else
+            echo "Writing:  $bpath"
             mkdir -p "$(dirname $bpath)"
             cat "$fpath" | process_file > "$bpath"
         fi
